@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  bot:
+    image: ghcr.io/mikhail-angelov/jocker-bot:latest
+    container_name: jocker-bot
+    volumes:
+      - ./data:/app/data
+    env_file:
+      - ./.env.production
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"

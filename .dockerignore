@@ -1,0 +1,11 @@
+node_modules
+.git
+.gitignore
+.github
+README.md
+.env
+.env.example
+*.db
+data/state.json
+data/stats.db
+data/jokes.example.json

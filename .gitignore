@@ -2,5 +2,8 @@ node_modules/
 .env
 data/*.json
 !data/jokes.example.json
+*.db
+*.db-shm
+*.db-wal
+data/jokes.json
 *.log
-package-lock.json
