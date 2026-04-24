@@ -44,5 +44,5 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Verify dependencies resolve
-        run: node -e "require('dotenv'); require('node-telegram-bot-api'); require('openai'); require('better-sqlite3'); console.log('✅ All deps OK')"
+      - name: Run tests (native node:test)
+        run: node --test tests/

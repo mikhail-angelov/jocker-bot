@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
-    "test": "vitest run"
+    "test": "node --test tests/",
+    "test:coverage": "node --experimental-test-coverage --test tests/"
   },
   "type": "module",
   "dependencies": {
@@ -14,8 +15,5 @@
     "dotenv": "^16.4.7",
     "node-telegram-bot-api": "^0.66.0",
     "openai": "^4.0.0"
-  },
-  "devDependencies": {
-    "vitest": "^4.1.5"
   }
 }
