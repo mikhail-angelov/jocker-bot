@@ -16,13 +16,15 @@ build:
 
 install:
 	@echo "📦 Installing on $(HOST)..."
-	ssh -t root@$(HOST) "mkdir -p /opt/jocker-bot/data && test -f /opt/jocker-bot/.env.production || echo '⚠️  Create /opt/jocker-bot/.env.production on server'"
+	ssh -t root@$(HOST) "mkdir -p /opt/jocker-bot/data"
+	scp ./.env root@$(HOST):/opt/jocker-bot/.env
+	scp ./docker-compose.yml root@$(HOST):/opt/jocker-bot/docker-compose.yml
+	rsync ./data/* root@$(HOST):/opt/jocker-bot/data/
 
 deploy:
 	@echo "🚀 Deploying to $(HOST)..."
 	ssh root@$(HOST) "docker pull ghcr.io/mikhail-angelov/jocker-bot:latest"
 	-ssh root@$(HOST) "cd /opt/jocker-bot && docker compose down"
-	scp ./docker-compose.yml root@$(HOST):/opt/jocker-bot/docker-compose.yml
 	ssh root@$(HOST) "cd /opt/jocker-bot && docker compose up -d"
 	@echo "✅ Done! Check logs with: make logs"
 

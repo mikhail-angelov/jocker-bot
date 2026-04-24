@@ -17,5 +17,3 @@ COPY data/ ./data/
 
 # Use non-root user for security
 USER node
-
-CMD ["node", "src/index.js"]

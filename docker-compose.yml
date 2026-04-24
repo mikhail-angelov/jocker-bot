@@ -7,8 +7,9 @@ services:
     volumes:
       - ./data:/app/data
     env_file:
-      - ./.env.production
+      - ./.env
     restart: unless-stopped
+    command: "node src/index.js"
     logging:
       driver: "json-file"
       options:
