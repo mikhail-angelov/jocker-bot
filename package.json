@@ -1,0 +1,16 @@
+{
+  "name": "jocker-bot",
+  "version": "0.1.0",
+  "description": "Telegram bot that tells jokes every ~100 messages with mood-based selection",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js"
+  },
+  "type": "module",
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "node-telegram-bot-api": "^0.66.0",
+    "openai": "^4.0.0"
+  }
+}
