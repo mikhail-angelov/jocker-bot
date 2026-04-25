@@ -23,6 +23,20 @@ const ROOT = resolve(__dirname, '..');
 dotenv.config({ path: resolve(ROOT, '.env') });
 
 // ═══════════════════════════════════════════════════════════
+// Observability (must be before any usage)
+// ═══════════════════════════════════════════════════════════
+
+function log(level, msg) {
+  const line = `${new Date().toISOString()} ${level.padEnd(5)} ${msg}`;
+  (level === 'ERROR' ? process.stderr : process.stdout).write(line + '\n');
+}
+const info = (...a) => log('INFO', a.map(v => typeof v === 'object' ? JSON.stringify(v) : v).join(' '));
+const error = (...a) => log('ERROR', a.map(v => typeof v === 'object' ? JSON.stringify(v) : v).join(' '));
+
+process.on('unhandledRejection', (err) => error('UNHANDLED REJECTION:', err.message, err.stack));
+process.on('uncaughtException', (err) => { error('UNCAUGHT EXCEPTION:', err.message, err.stack); process.exit(1); });
+
+// ═══════════════════════════════════════════════════════════
 // Config
 // ═══════════════════════════════════════════════════════════
 
@@ -433,20 +447,6 @@ async function onMessage(msg) {
 
   flushState();
 }
-
-// ═══════════════════════════════════════════════════════════
-// Observability (must be before any usage)
-// ═══════════════════════════════════════════════════════════
-
-function log(level, msg) {
-  const line = `${new Date().toISOString()} ${level.padEnd(5)} ${msg}`;
-  (level === 'ERROR' ? process.stderr : process.stdout).write(line + '\n');
-}
-const info = (...a) => log('INFO', a.map(v => typeof v === 'object' ? JSON.stringify(v) : v).join(' '));
-const error = (...a) => log('ERROR', a.map(v => typeof v === 'object' ? JSON.stringify(v) : v).join(' '));
-
-process.on('unhandledRejection', (err) => error('UNHANDLED REJECTION:', err.message, err.stack));
-process.on('uncaughtException', (err) => { error('UNCAUGHT EXCEPTION:', err.message, err.stack); process.exit(1); });
 
 // ═══════════════════════════════════════════════════════════
 // Init
