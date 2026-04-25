@@ -34,6 +34,7 @@ const {
   DEFAULT_INTERVAL = '100',
   DEFAULT_THRESHOLD = '7',
   DEFAULT_DEDUP_WINDOW = '50',
+  PROXY_URL,
 } = process.env;
 
 const CFG = {
@@ -69,10 +70,15 @@ sdb.exec(`
   CREATE INDEX IF NOT EXISTS idx_top_jokes_score ON top_jokes(chat_id, score DESC);
 `);
 
+// Count existing stats
+const topJokesCount = sdb.prepare('SELECT COUNT(*) AS cnt FROM top_jokes').get().cnt;
+const userStatsCount = sdb.prepare('SELECT COUNT(*) AS cnt FROM user_stats').get().cnt;
+info(`SQLITE DB: ${DB_PATH} — ${topJokesCount} top jokes, ${userStatsCount} user stats records`);
+
 const sdbStmts = {
   addTopJoke: sdb.prepare('INSERT INTO top_jokes (chat_id, joke_text, score, source, ts) VALUES (?, ?, ?, ?, ?)'),
   getTopJokes: sdb.prepare('SELECT joke_text, score, source FROM top_jokes WHERE chat_id = ? ORDER BY score DESC LIMIT ?'),
-  hasHash: sdb.prepare('SELECT 1 FROM joke_hashes WHERE chat_id = ? AND hash = ?'),
+  hasHash: sdb.prepare('SELECT hash FROM joke_hashes WHERE chat_id = ?'),
   addHash: sdb.prepare('INSERT OR IGNORE INTO joke_hashes (chat_id, hash) VALUES (?, ?)'),
   cleanHashes: sdb.prepare("DELETE FROM joke_hashes WHERE created_at < strftime('%s','now','-7 days')"),
   upsertUser: sdb.prepare(`
@@ -116,9 +122,22 @@ const flushState = () => writeFileSync(STATE_FILE, JSON.stringify(state, null, 2
 
 const JOKES = (() => {
   const path = resolve(ROOT, JOKES_FILE);
-  if (!existsSync(path)) return [];
-  try { return JSON.parse(readFileSync(path, 'utf-8')); }
-  catch { return []; }
+  if (!existsSync(path)) {
+    info(`JOKES DB: file not found at ${path} — no jokes loaded`);
+    return [];
+  }
+  try {
+    const data = JSON.parse(readFileSync(path, 'utf-8'));
+    if (!Array.isArray(data) || data.length === 0) {
+      info(`JOKES DB: file ${path} is empty or invalid — no jokes loaded`);
+      return [];
+    }
+    info(`JOKES DB: loaded ${data.length} jokes from ${path}`);
+    return data;
+  } catch (e) {
+    info(`JOKES DB: failed to parse ${path} — ${e.message}`);
+    return [];
+  }
 })();
 
 // ═══════════════════════════════════════════════════════════
@@ -237,7 +256,9 @@ async function tryTellJoke(chatId, cs, userName, replyToMsgId) {
     if (!result) { cs.messageCount--; flushState(); return; }
 
     const tagMap = { bash: '💻', joke: '📖', gen: '🤖' };
-    await bot.sendMessage(chatId, `${result.joke.text} ${tagMap[result.source] || ''}`, replyToMsgId ? { reply_to_message_id: replyToMsgId } : {});
+    const replyText = `${result.joke.text} ${tagMap[result.source] || ''}`;
+    await bot.sendMessage(chatId, replyText, replyToMsgId ? { reply_to_message_id: replyToMsgId } : {});
+    info(`REPLY [chat:${chatId}]: ${replyText.slice(0, 120)}`);
 
     // Track style
     if (result.score >= 9) cs.chatProfile.style = 'absurd';
@@ -278,6 +299,19 @@ function handleCommand(msg) {
   const chatId = msg.chat.id;
   const text = msg.text || '';
   const cs = getChatState(chatId);
+
+  // Strip bot mention for command matching
+  const botUsername = (bot._botInfo || { username: 'JockerOCCBot' }).username?.toLowerCase();
+  const cleanText = text.replace(new RegExp('@' + botUsername, 'gi'), '').trim();
+
+  // /id — anyone can use
+  if (/^\/j?id$/.test(text) || /^\/j?id$/.test(cleanText)) {
+    const title = msg.chat.title || msg.chat.username || 'private';
+    const reply = `🆔 Chat: ${chatId}\nTitle: ${title}`;
+    bot.sendMessage(chatId, reply);
+    info(`REPLY [${title}]: /id → ${chatId}`);
+    return true;
+  }
 
   if (!isAdmin(msg)) {
     bot.sendMessage(chatId, '❌ Только админ может менять настройки');
@@ -354,10 +388,6 @@ async function onMessage(msg) {
   const text = msg.text || msg.caption || '';
   if (!text) return;
 
-  // Commands
-  const cmdPrefix = /^\/(j?config|j?interval|j?threshold|j?source|j?stats|j?top)/;
-  if (cmdPrefix.test(text)) { handleCommand(msg); return; }
-
   const cs = getChatState(chatId);
   const title = msg.chat.title || msg.chat.username || (msg.chat.first_name || '') + ' ' + (msg.chat.last_name || '') || 'private';
   const fromName = msg.from?.first_name || msg.from?.username || 'unknown';
@@ -366,9 +396,14 @@ async function onMessage(msg) {
 
   const userName = msg.from?.first_name || msg.from?.username || 'User';
   const userKey = msg.from?.username || msg.from?.first_name || 'unknown';
-  const botUsername = (bot._botInfo || { username: 'jocker_oc_bot' }).username?.toLowerCase();
+  const botUsername = (bot._botInfo || { username: 'JockerOCCBot' }).username?.toLowerCase();
   const isMention = text.toLowerCase().includes('@' + botUsername);
   const isReplyToBot = msg.reply_to_message?.from?.is_bot;
+
+  // Commands — check both bare commands and mention+command
+  const cmdPrefix = /^\/(j?config|j?interval|j?threshold|j?source|j?stats|j?top|id)/;
+  const cleanText = text.replace(new RegExp('@' + botUsername, 'gi'), '').trim();
+  if (cmdPrefix.test(text) || cmdPrefix.test(cleanText)) { handleCommand(msg); return; }
 
   // History
   cs.history.push({ from: fromName, fromUserKey: userKey, text, ts: Date.now() });
@@ -420,7 +455,12 @@ process.on('uncaughtException', (err) => { error('UNCAUGHT EXCEPTION:', err.mess
 if (!BOT_TOKEN) { error('❌ BOT_TOKEN is required.'); process.exit(1); }
 if (!LLM_API_KEY && !process.env.OPENAI_API_KEY) { error('❌ LLM_API_KEY is required.'); process.exit(1); }
 
-const bot = new TelegramBot(BOT_TOKEN, { polling: true });
+const botOptions = { polling: true };
+if (PROXY_URL) {
+  info(`Using proxy: ${PROXY_URL}`);
+  botOptions.request = { proxy: PROXY_URL };
+}
+const bot = new TelegramBot(BOT_TOKEN, botOptions);
 bot.on('message', onMessage);
 
 info(`Jocker Bot started. Interval: ${CFG.interval}, threshold: ${CFG.threshold}`);

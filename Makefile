@@ -16,10 +16,11 @@ build:
 
 install:
 	@echo "📦 Installing on $(HOST)..."
-	ssh -t root@$(HOST) "mkdir -p /opt/jocker-bot/data"
+	ssh -t root@$(HOST) "mkdir -p /opt/jocker-bot/data && chown 1000:1000 /opt/jocker-bot/data"
 	scp ./.env root@$(HOST):/opt/jocker-bot/.env
 	scp ./docker-compose.yml root@$(HOST):/opt/jocker-bot/docker-compose.yml
 	rsync ./data/* root@$(HOST):/opt/jocker-bot/data/
+	ssh -t root@$(HOST) "chown -R 1000:1000 /opt/jocker-bot/data"
 
 deploy:
 	@echo "🚀 Deploying to $(HOST)..."
